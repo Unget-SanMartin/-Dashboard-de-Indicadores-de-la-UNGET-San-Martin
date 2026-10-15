@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Indicadores FED 2025-26 · UNGET San Martín</title>
+<link rel="stylesheet" href="estilos.css?v=12">
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="logo"><img src="logo-unget.jpg" alt="UNGET San Martín"></div>
+    <div>
+      <h1 id="titulo">Indicadores FED 2025-26</h1>
+      <p id="subtitulo">Seguimiento de cumplimiento por indicador</p>
+      <small id="estadoCarga">Cargando datos…</small>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="aviso"></div>
+
+  <section class="kpis" aria-live="polite">
+    <div class="kpi"><span>Indicadores</span><b id="kInd">–</b></div>
+    <div class="kpi"><span>Registros</span><b id="kReg">–</b></div>
+    <div class="kpi ok"><span>Cumplen</span><b id="kOk">–</b></div>
+    <div class="kpi mid"><span>En proceso</span><b id="kMid">–</b></div>
+    <div class="kpi bad"><span>No cumplen</span><b id="kBad">–</b></div>
+  </section>
+
+  <section class="filtros">
+    <div class="panel"><h2>📅 Periodo</h2><div class="lista" id="fPeriodo" role="radiogroup" aria-label="Periodo"></div></div>
+    <div class="panel"><h2>📍 Distrito</h2><div class="lista" id="fDistrito" role="radiogroup" aria-label="Distrito"></div></div>
+    <div class="panel"><h2>🏥 MicroRed</h2><select id="fMicrored" aria-label="MicroRed"></select></div>
+  </section>
+
+  <div class="grid2">
+    <section class="tabla-card">
+      <h2>📋 Listado de indicadores</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Indicador</th><th>Nombre</th><th class="n">Numerador</th><th class="n">Denominador</th><th class="n">% Cumplimiento</th><th>Estado</th><th class="col-grano">Grano</th></tr></thead>
+          <tbody id="tInd"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="tabla-card">
+      <h2>📍 MicroRed</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n">Puntaje</th></tr></thead>
+          <tbody id="tMr"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    Registros: cada indicador por mes y establecimiento (o distrito, en los indicadores distritales). Puntaje = registros que cumplen ÷ registros evaluados × 100. Toca un indicador para ver su detalle.
+    <span id="actualizado"></span>
+  </footer>
+</main>
+
+<script src="comun.js?v=12"></script>
+<script>
+const filtro = {periodo:TODOS, ubigeo:TODOS, microred:TODOS};
+
+function filtradas(){
+  return DATOS.filter(r =>
+    (filtro.periodo === TODOS || r.periodo === filtro.periodo) &&
+    (filtro.ubigeo === TODOS || r.ubigeo === filtro.ubigeo) &&
+    (filtro.microred === TODOS || r.mr === filtro.microred));
+}
+
+function enlaceDetalle(c){
+  const p = new URLSearchParams({indicador:c});
+  if (filtro.periodo !== TODOS) p.set("periodo", filtro.periodo);
+  if (filtro.ubigeo !== TODOS) p.set("ubigeo", filtro.ubigeo);
+  if (filtro.microred !== TODOS) p.set("microred", filtro.microred);
+  return "detalle.html?" + p;
+}
+
+function render(){
+  const rows = filtradas();
+  const k = {cumple:0, proceso:0, nocumple:0};
+  const mr = new Map();
+  for (const r of rows){
+    const e = estado(avance(r), indDe(r.codigo));
+    if (!(e in k)) continue;
+    k[e]++;
+    if (!mr.has(r.mr)) mr.set(r.mr, {cumple:0, proceso:0, nocumple:0});
+    mr.get(r.mr)[e]++;
+  }
+  const codigos = [...new Set(rows.map(r => r.codigo))];
+  kInd.textContent = fN(codigos.length);
+  kReg.textContent = fN(rows.length);
+  kOk.textContent = fN(k.cumple); kMid.textContent = fN(k.proceso); kBad.textContent = fN(k.nocumple);
+
+  const orden = [...IND.keys()].filter(c => codigos.includes(c)).concat(codigos.filter(c => !IND.has(c)).sort());
+  tInd.innerHTML = orden.map(c => {
+    const ind = indDe(c), rs = rows.filter(r => r.codigo === c), s = sumar(rs), e = estado(s.av, ind);
+    const grano = ind.grano || (rs.some(r => r.eess) ? "EESS" : "Distrito");
+    return `<tr class="ind" tabindex="0" data-href="${esc(enlaceDetalle(c))}" title="Ver detalle de ${esc(c)}">
+      <td><span class="cod">${esc(c)}</span></td>
+      <td>${esc(ind.nombre)}</td>
+      <td class="n">${fN(s.n)}</td><td class="n">${fN(s.d)}</td>
+      <td class="n">${fP(s.av)}<span class="meta">${ind.meta != null ? `meta ${esDesc(ind) ? "≤ " : ""}${fP(ind.meta)}` : ""}</span></td>
+      <td>${pill(e)}</td><td class="col-grano">${esc(grano)}</td></tr>`;
+  }).join("") || `<tr><td colspan="7">No hay registros con estos filtros.</td></tr>`;
+
+  tMr.innerHTML = [...mr.entries()].map(([m, x]) => {
+    const t = x.cumple + x.proceso + x.nocumple; return {m, x, p: t ? x.cumple / t * 100 : 0};
+  }).sort((a, b) => b.p - a.p).map(({m, x, p}) => `<tr>
+      <td>${esc(m)}</td><td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
+      <td class="n">${p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p}%"></i></div></td></tr>`).join("")
+    || `<tr><td colspan="5">Sin registros.</td></tr>`;
+}
+
+function radios(cont, nombre, opciones, actual){
+  cont.innerHTML = opciones.map(o =>
+    `<label><input type="radio" name="${nombre}" value="${esc(o.v)}" ${o.v === actual ? "checked" : ""}> ${esc(o.t)}</label>`).join("");
+}
+
+async function iniciar(){
+  try { await cargarDatos(); }
+  catch (e){
+    document.querySelector(".grid2").innerHTML = `<div class="error"><strong>No se pudieron cargar los datos.</strong> ${esc(e.message)}</div>`;
+    estadoCarga.textContent = "Sin datos"; return;
+  }
+  // Recordar filtros al volver desde el detalle
+  const q = new URLSearchParams(location.search);
+  ["periodo","ubigeo","microred"].forEach(k => { if (q.get(k)) filtro[k] = q.get(k); });
+
+  if (CFG.titulo) titulo.textContent = CFG.titulo.replace(/(\d)-(\d)/g, "$1\u2011$2");
+  if (CFG.subtitulo) subtitulo.textContent = CFG.subtitulo;
+  document.title = titulo.textContent;
+  estadoCarga.textContent = `● ${fN(DATOS.length)} registros`;
+  if (CFG.actualizado) actualizado.textContent = ` Datos actualizados el ${CFG.actualizado}.`;
+  if (CFG.datos_de_ejemplo) aviso.innerHTML = `<p class="aviso">Datos de ejemplo. Ejecuta <strong>actualizar.ps1</strong> y cambia <strong>datos_de_ejemplo</strong> a <strong>false</strong> en datos/config.json.</p>`;
+
+  const periodos = [...new Set(DATOS.map(r => r.periodo))].sort();
+  radios(fPeriodo, "periodo", [{v:TODOS, t:"Todos los periodos"}, ...periodos.map(p => ({v:p, t:fPer(p)}))], filtro.periodo);
+  const dist = new Map(); DATOS.forEach(r => r.ubigeo && dist.set(r.ubigeo, nomDist(r)));
+  radios(fDistrito, "distrito", [{v:TODOS, t:"Todos los distritos"}, ...[...dist].sort().map(([u, d]) => ({v:u, t:d}))], filtro.ubigeo);
+  const mrs = [...new Set(DATOS.map(r => r.mr))].sort((a, b) => (a === SIN_MR) - (b === SIN_MR) || a.localeCompare(b));
+  fMicrored.innerHTML = `<option value="${TODOS}">Todas las MicroRedes</option>` + mrs.map(m => `<option>${esc(m)}</option>`).join("");
+  fMicrored.value = filtro.microred;
+
+  fPeriodo.addEventListener("change", e => { filtro.periodo = e.target.value; render(); });
+  fDistrito.addEventListener("change", e => { filtro.ubigeo = e.target.value; render(); });
+  fMicrored.addEventListener("change", e => { filtro.microred = e.target.value; render(); });
+  tInd.addEventListener("click", e => { const tr = e.target.closest("tr.ind"); if (tr) location.href = tr.dataset.href; });
+  tInd.addEventListener("keydown", e => { const tr = e.target.closest("tr.ind"); if (tr && e.key === "Enter") location.href = tr.dataset.href; });
+  render();
+}
+iniciar();
+</script>
+</body>
+</html>

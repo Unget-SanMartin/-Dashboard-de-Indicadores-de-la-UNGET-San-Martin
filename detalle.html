@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Detalle del indicador · UNGET San Martín</title>
+<link rel="stylesheet" href="estilos.css?v=12">
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <div class="logo"><img src="logo-unget.jpg" alt="UNGET San Martín"></div>
+    <div>
+      <h1>UNGET San Martín</h1>
+      <p>Detalle de indicadores FED</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <a class="volver" id="volver" href="index.html">← Volver al dashboard</a>
+
+  <section class="cab-ind">
+    <small id="dCodigo">–</small>
+    <h2 id="dNombre">Cargando…</h2>
+    <p id="dResumen"></p>
+  </section>
+  <p class="filtro-activo" id="dFiltro"></p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-actividad" aria-selected="true" data-tab="actividad">
+      <b>📊 Detalle por actividad</b><span>Resultados por distrito y establecimiento</span></button>
+    <button class="tab" role="tab" id="tab-seguimiento" aria-selected="false" data-tab="seguimiento">
+      <b>⚠️ Seguimiento</b><span>Registros que no cumplen la meta</span></button>
+    <button class="tab" role="tab" id="tab-evolucion" aria-selected="false" data-tab="evolucion">
+      <b>📈 Evolución mensual</b><span>Avance del indicador mes a mes</span></button>
+  </div>
+
+  <section class="tabla-card" role="tabpanel">
+    <div class="cab"><h2 id="tTitulo">Detalle por actividad</h2><span class="contador" id="tContador"></span></div>
+    <div class="scroll" id="tCont"></div>
+  </section>
+</main>
+
+<script src="comun.js?v=12"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const COD = q.get("indicador");
+const F = {periodo:q.get("periodo"), ubigeo:q.get("ubigeo"), microred:q.get("microred")};
+let pestaña = "actividad", base = [];
+
+/* ---------- Reporte nominal (solo en tu PC) ----------
+   exportar_nominal.ps1 deja privado/<CODIGO>_nominal.csv (cumplen y no cumplen).
+   Esa carpeta no se sube a GitHub, así que en la web publicada
+   los botones de descarga no aparecen. */
+const ES_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+let NOM = null, NC = {};
+let LISTAS = [];                       // personas por fila de la tabla actual
+const normal = t => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+const colDe = (cols, ...res) => { for (const re of res){ const c = cols.find(x => re.test(x)); if (c) return c; } return null; };
+
+async function cargarNominal(){
+  if (!ES_LOCAL) return;
+  try{
+    let r = await fetch(`privado/${encodeURIComponent(COD)}_nominal.csv`, {cache:"no-store"});
+    if (!r.ok) r = await fetch(`privado/${encodeURIComponent(COD)}_no_cumplen.csv`, {cache:"no-store"});
+    if (!r.ok) return;
+    NOM = parseCSV(await r.text(), true);
+    if (!NOM.length){ NOM = null; return; }
+    const cols = Object.keys(NOM[0]);
+    NC = {
+      ubi:  colDe(cols, /^ubigeo$/i, /ubigeo/i),
+      dist: colDe(cols, /^distrito$/i, /distrito/i),
+      per:  colDe(cols, /^(periodo|mes|anio_mes|aniomes)$/i, /fecha_parto/i, /^fecha/i),
+      doc:  cols.filter(c => /doc|dni/i.test(c)),
+      cond: colDe(cols, /^condicion$/i, /condicion/i)
+    };
+    // Columna con el código del establecimiento (para indicadores por EESS)
+    const ren = new Set(DATOS.filter(r => r.codigo === COD && r.renaes).map(r => +r.renaes));
+    NC.eess = ren.size ? cols.filter(c => /renaes|eess|establec|codigo_unico|cod_local|co_local/i.test(c))
+                              .find(c => NOM.some(p => ren.has(+p[c]))) || null : null;
+  } catch(_){ NOM = null; }
+}
+function mesDe(v){
+  v = String(v ?? "").trim();
+  let m;
+  if ((m = /^(\d{4})-(\d{2})/.exec(v))) return `${m[1]}-${m[2]}`;
+  if ((m = /^(\d{4})(\d{2})$/.exec(v))) return `${m[1]}-${m[2]}`;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(v))) return `${m[3]}-${m[2].padStart(2,"0")}`;
+  if ((m = /^(\d{1,2})$/.exec(v))) return "MES-" + m[1].padStart(2, "0");
+  return null;
+}
+function personasDe(r){
+  if (!NOM) return [];
+  const nomDistrito = normal(String(r.distrito).replace(/^\d+\s*/, ""));
+  return NOM.filter(p => {
+    let okD = true;
+    if (r.renaes && NC.eess) okD = +p[NC.eess] === +r.renaes;      // indicador por establecimiento
+    else if (NC.ubi) okD = String(p[NC.ubi]).trim().startsWith(r.ubigeo);
+    else if (NC.dist){ const v = normal(p[NC.dist]); okD = v.startsWith(r.ubigeo) || (nomDistrito && v.includes(nomDistrito)); }
+    if (!okD) return false;
+    if (!NC.per) return true;
+    const m = mesDe(p[NC.per]);
+    if (!m) return true;
+    return m.startsWith("MES-") ? m.slice(4) === r.periodo.slice(5) : m === r.periodo;
+  });
+}
+function descargar(personas, nombre){
+  if (!personas.length){ alert("No hay personas para descargar en esta fila."); return; }
+  if (NC.cond) personas = [...personas].sort((a, b) => (/^no/i.test(b[NC.cond]) ? 1 : 0) - (/^no/i.test(a[NC.cond]) ? 1 : 0));
+  const cols = Object.keys(personas[0]);
+  const celda = v => { v = String(v ?? ""); return /[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  const valor = (p, c) => NC.doc.includes(c) && p[c] ? `="${p[c]}"` : celda(p[c]);   // DNI como texto
+  const texto = "\uFEFF" + [cols.map(celda).join(";"), ...personas.map(p => cols.map(c => valor(p, c)).join(";"))].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
+  a.download = nombre.replace(/[^\w.-]+/g, "_") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+// Columna "Reporte" + botón "Descargar todos" para cualquier tabla de filas
+function conReporte(rs, cab, fila, vacio){
+  LISTAS = NOM ? rs.map(personasDe) : [];
+  const todas = LISTAS.flat();
+  const c = NOM ? [...cab, ["Reporte"]] : cab;
+  const cuerpo = rs.map((r, i) => `<tr>${fila(r)}${NOM ? `<td>${btnRep(i, LISTAS[i].length, LISTAS[i])}</td>` : ""}</tr>`).join("")
+    || `<tr><td colspan="${c.length}">${vacio}</td></tr>`;
+  tCont.onclick = e => {
+    const b = e.target.closest(".btn-rep"); if (!b) return;
+    const filtroTxt = [F.periodo || "todos_meses", F.ubigeo || "", F.microred || ""].filter(Boolean).join("_");
+    if (b.dataset.i === "todo") descargar(todas, `nominal_${COD}_${filtroTxt}`);
+    else { const r = rs[+b.dataset.i]; descargar(LISTAS[+b.dataset.i], `nominal_${COD}_${nomDist(r)}${r.eess ? "_" + r.eess : ""}_${r.periodo}`); }
+  };
+  return (NOM ? `<div class="barra-rep"><span class="local">Solo en tu PC · no se publica</span>
+      <button type="button" class="btn-rep todo" data-i="todo">⬇ Descargar todos (${fN(todas.length)})</button></div>` : "")
+    + tabla(c, cuerpo);
+}
+const cuentaNo = l => NC.cond ? l.filter(p => /^no/i.test(p[NC.cond])).length : null;
+const btnRep = (i, k, l) => `<button type="button" class="btn-rep" data-i="${i}" title="Descargar personas (cumplen y no cumplen)">⬇ ${fN(k)}${l && cuentaNo(l) != null ? ` · ✘${fN(cuentaNo(l))}` : ""}</button>`;
+const enFiltro = r => r.codigo === COD &&
+  (!F.ubigeo || r.ubigeo === F.ubigeo) && (!F.microred || r.mr === F.microred);
+const enPeriodo = r => !F.periodo || r.periodo === F.periodo;
+const orden = (a, b) => b.periodo.localeCompare(a.periodo) || a.distrito.localeCompare(b.distrito) || a.eess.localeCompare(b.eess);
+
+function tabla(cab, filas){
+  return `<table><thead><tr>${cab.map(([t, n]) => `<th${n ? ' class="n"' : ""}>${t}</th>`).join("")}</tr></thead><tbody>${filas}</tbody></table>`;
+}
+
+function render(){
+  const ind = indDe(COD);
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.tab === pestaña));
+  let html = "", n = 0;
+
+  if (pestaña === "actividad"){
+    const rs = base.filter(enPeriodo).sort(orden); n = rs.length;
+    tTitulo.textContent = "Detalle por actividad";
+    html = conReporte(rs, [["Distrito"],["EESS"],["MicroRed"],["Periodo"],["Numerador",1],["Denominador",1],["% Cumplimiento",1],["Estado"],["Grano"]],
+      r => `<td>${esc(nomDist(r))}</td><td>${esc(r.eess || "-")}</td><td>${esc(r.microred || "-")}</td>
+        <td>${fPer(r.periodo)}</td><td class="n">${fN(r.n)}</td><td class="n">${fN(r.d)}</td><td class="n">${fP(avance(r))}</td>
+        <td>${pill(estado(avance(r), ind))}</td><td>${r.eess ? "EESS" : "Distrito"}</td>`, "Sin registros.");
+  }
+
+  if (pestaña === "seguimiento"){
+    const rs = base.filter(enPeriodo)
+      .map(r => ({...r, e: estado(avance(r), ind)}))
+      .filter(r => r.e === "nocumple" || r.e === "proceso")
+      .sort((a, b) => (avance(a) ?? 0) - (avance(b) ?? 0) || orden(a, b));
+    n = rs.length;
+    tTitulo.textContent = "Seguimiento: registros que no cumplen";
+    html = conReporte(rs, [["Distrito"],["Ubigeo"],["EESS"],["MicroRed"],["Periodo"],["Numerador",1],["Denominador",1],["% Cumplimiento",1],["Estado"]],
+      r => `<td>${esc(nomDist(r))}</td><td>${esc(r.ubigeo)}</td><td>${esc(r.eess || "-")}</td><td>${esc(r.microred || "-")}</td>
+        <td>${fPer(r.periodo)}</td><td class="n">${fN(r.n)}</td><td class="n">${fN(r.d)}</td><td class="n">${fP(avance(r))}</td>
+        <td>${pill(r.e)}</td>`, "Todos los registros cumplen la meta.");
+  }
+
+  if (pestaña === "evolucion"){
+    tCont.onclick = null;
+    const per = [...new Set(base.map(r => r.periodo))].sort();
+    n = per.length;
+    tTitulo.textContent = "Evolución mensual";
+    const hayMeta = ind.meta != null, desc = esDesc(ind);
+    const textoMeta = hayMeta ? `${desc ? "≤ " : ""}${fP(ind.meta)}` : "sin meta";
+    html = (hayMeta ? `<p style="padding:0 16px;margin:0 0 12px">Meta del indicador: <strong style="font-size:1.15rem">${textoMeta}</strong>. La línea negra de cada barra marca esa meta.</p>` : "")
+      + tabla([["Periodo"],["Numerador",1],["Denominador",1],["% Cumplimiento",1],["Meta",1],["Meta en casos",1],[`Avance frente a la meta (${textoMeta})`],["Estado"]],
+      per.map(p => {
+        const s = sumar(base.filter(r => r.periodo === p)), e = estado(s.av, ind);
+        const w = s.av == null ? 0 : Math.min(100, s.av);
+        const metaCasos = hayMeta && s.d ? Math.ceil(ind.meta / 100 * s.d - 1e-9) : null;
+        return `<tr${p === F.periodo ? ' style="font-weight:700"' : ""}><td>${fPer(p)}</td><td class="n">${fN(s.n)}</td><td class="n">${fN(s.d)}</td><td class="n">${fP(s.av)}</td>
+          <td class="n">${hayMeta ? fP(ind.meta) : "—"}</td><td class="n">${metaCasos == null ? "—" : fN(metaCasos)}</td>
+          <td style="min-width:180px"><div class="barra" style="position:relative;height:10px"><i style="width:${w}%;background:${ESTADOS[e].color}"></i>
+          ${ind.meta != null ? `<span style="position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);left:${Math.min(100, ind.meta)}%"></span>` : ""}</div></td>
+          <td>${pill(e)}</td></tr>`;
+      }).join(""));
+  }
+  tContador.textContent = `${fN(n)} ${pestaña === "evolucion" ? "meses" : "registros"}`;
+  tCont.innerHTML = html;
+}
+
+async function iniciar(){
+  // El botón Volver conserva los filtros del dashboard
+  const vuelta = new URLSearchParams();
+  ["periodo","ubigeo","microred"].forEach(k => F[k] && vuelta.set(k, F[k]));
+  volver.href = "index.html" + (vuelta.toString() ? "?" + vuelta : "");
+
+  try { await cargarDatos(); }
+  catch (e){ tCont.innerHTML = `<div class="error"><strong>No se pudieron cargar los datos.</strong> ${esc(e.message)}</div>`; return; }
+  if (!COD){ dNombre.textContent = "No se indicó el indicador."; return; }
+
+  const ind = indDe(COD);
+  base = DATOS.filter(enFiltro);
+  dCodigo.textContent = COD;
+  dNombre.textContent = ind.nombre;
+  document.title = `${COD} · Detalle del indicador`;
+  const s = sumar(base.filter(enPeriodo));
+  dResumen.innerHTML = `${fN(s.n)} de ${fN(s.d)} · ${fP(s.av)} ${pill(estado(s.av, ind))}` +
+    (ind.meta != null ? ` · Meta ${esDesc(ind) ? "≤ " : ""}${fP(ind.meta)}` : "");
+  const partes = [F.periodo ? fPer(F.periodo) : "Todos los periodos"];
+  if (F.ubigeo){ const r = DATOS.find(x => x.ubigeo === F.ubigeo); partes.push(`Distrito ${r ? nomDist(r) : F.ubigeo}`); }
+  if (F.microred) partes.push(`MicroRed ${F.microred}`);
+  dFiltro.textContent = "Filtro: " + partes.join(" · ");
+
+  await cargarNominal();
+  document.querySelector(".tabs").addEventListener("click", e => {
+    const t = e.target.closest(".tab"); if (t){ pestaña = t.dataset.tab; render(); }
+  });
+  render();
+}
+iniciar();
+</script>
+</body>
+</html>

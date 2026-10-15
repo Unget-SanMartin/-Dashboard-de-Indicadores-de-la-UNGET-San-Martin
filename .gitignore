@@ -1,0 +1,40 @@
+# ==========================================
+# Datos nominales: NUNCA subir
+# ==========================================
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+!datos/indicadores.csv
+*.txt
+*.dbf
+*.mdb
+*.accdb
+
+# Power BI (contiene copia de los datos)
+*.pbix
+*.pbit
+
+# Respaldos y archivos de SQL Server
+*.bak
+*.mdf
+*.ldf
+*.ndf
+*.rpt
+
+# Carpetas locales de trabajo
+exportaciones/
+salidas/
+privado/
+
+# ==========================================
+# Temporales de Office, sistema y editores
+# ==========================================
+~$*
+*.tmp
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+*.exe
+*.zip

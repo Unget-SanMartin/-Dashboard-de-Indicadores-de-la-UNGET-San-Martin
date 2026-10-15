@@ -1,0 +1,128 @@
+﻿[
+    {
+        "codigo":  "MC-01.01",
+        "nombre":  "Mujeres con parto institucional (distritos quintil 1 y 2) que recibieron el paquete integrado de servicios en la gestación",
+        "eje":  "MC",
+        "grano":  "Distrito",
+        "meta":  0.4340,
+        "umbral_en_proceso":  0.3255,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "MC-02.01",
+        "nombre":  "Niñas y niños menores de 12 meses (distritos quintil 1 y 2) que recibieron el paquete integrado de servicios",
+        "eje":  "MC",
+        "grano":  "Distrito",
+        "meta":  0.6000,
+        "umbral_en_proceso":  0.4500,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "MC-03.01",
+        "nombre":  "Recién nacidos que reciben vacunas BCG, HvB, controles CRED y tamizaje neonatal",
+        "eje":  "MC",
+        "grano":  "Distrito",
+        "meta":  0.5000,
+        "umbral_en_proceso":  0.3750,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-01.01",
+        "nombre":  "Gestantes con primera atención prenatal en el primer trimestre de gestación",
+        "eje":  "SI",
+        "grano":  "EESS",
+        "meta":  0.7590,
+        "umbral_en_proceso":  0.5690,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-01.02",
+        "nombre":  "Gestantes con anemia que reciben tratamiento con hierro y dosajes de hemoglobina",
+        "eje":  "SI",
+        "grano":  "EESS",
+        "meta":  0.6970,
+        "umbral_en_proceso":  0.5230,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-01.03",
+        "nombre":  "Mujeres con parto institucional sin anemia que recibieron suplementación preventiva con hierro y dosajes de hemoglobina",
+        "eje":  "SI",
+        "grano":  "Distrito",
+        "meta":  0.3060,
+        "umbral_en_proceso":  0.2300,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-02.01",
+        "nombre":  "Niñas y niños de 6 meses que a los 4 meses reciben suplementación preventiva con hierro y dosaje de hemoglobina",
+        "eje":  "SI",
+        "grano":  "Distrito",
+        "meta":  0.8130,
+        "umbral_en_proceso":  0.6100,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-02.02",
+        "nombre":  "Niñas y niños de 6 meses, prematuros y/o bajo peso, sin anemia, con suplementación preventiva con hierro y dosajes de hemoglobina",
+        "eje":  "SI",
+        "grano":  "Distrito",
+        "meta":  0.3450,
+        "umbral_en_proceso":  0.2590,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-02.03",
+        "nombre":  "Niñas y niños de 12 meses con anemia que reciben tratamiento con hierro y dosajes de hemoglobina",
+        "eje":  "SI",
+        "grano":  "Distrito",
+        "meta":  0.4540,
+        "umbral_en_proceso":  0.3405,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-02.04",
+        "nombre":  "Niñas y niños de 12 meses sin anemia que reciben suplementación preventiva con hierro y dosajes de hemoglobina",
+        "eje":  "SI",
+        "grano":  "Distrito",
+        "meta":  0.6070,
+        "umbral_en_proceso":  0.4550,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-03.01",
+        "nombre":  "Adolescentes mujeres de 12 a 17 años atendidas con dosaje de hemoglobina",
+        "eje":  "SI",
+        "grano":  "EESS",
+        "meta":  0.6800,
+        "umbral_en_proceso":  0.5100,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "SI-03.02",
+        "nombre":  "Adolescentes mujeres de 12 a 17 años, sin anemia, que reciben prestaciones priorizadas",
+        "eje":  "SI",
+        "grano":  "EESS",
+        "meta":  0.2500,
+        "umbral_en_proceso":  0.1875,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "VI-01.01",
+        "nombre":  "Gestantes con tamizaje positivo de violencia contra la mujer",
+        "eje":  "VI",
+        "grano":  "EESS",
+        "meta":  0.1000,
+        "umbral_en_proceso":  0.0750,
+        "sentido":  "Positivo"
+    },
+    {
+        "codigo":  "VI-01.02",
+        "nombre":  "Gestantes que reciben un paquete mínimo de intervenciones terapéuticas especializadas",
+        "eje":  "VI",
+        "grano":  "EESS",
+        "meta":  0.4130,
+        "umbral_en_proceso":  0.3100,
+        "sentido":  "Positivo"
+    }
+]
