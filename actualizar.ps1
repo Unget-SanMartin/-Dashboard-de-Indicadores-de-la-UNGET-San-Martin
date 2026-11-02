@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 #  Actualiza la carpeta datos/ desde DataHIS (SQL Server)
 #  Uso (desde la carpeta del repositorio):
 #     powershell -ExecutionPolicy Bypass -File .\actualizar.ps1
@@ -27,7 +27,20 @@ $res = Consultar "sql\exportar_indicadores.sql"
 $permitidas = "periodo","ubigeo","distrito","microred","eess","renaes","codigo","numerador","denominador"
 $extra = $res.Columns | Where-Object { $permitidas -notcontains $_.ColumnName }
 if ($extra) { throw "La consulta devuelve columnas no permitidas ($($extra.ColumnName -join ', ')). Solo cifras agregadas." }
-$res | Select-Object $permitidas |
+# Microred por distrito para las filas sin EESS (indicadores de grano Distrito)
+$md = @{}
+foreach ($r in (Consultar "sql\exportar_microred_distrito.sql").Rows) {
+    $md[([string]$r.ubigeo).Trim()] = [string]$r.microred
+}
+$cols = foreach ($c in $permitidas) {
+    if ($c -eq "microred") {
+        @{ Name = "microred"; Expression = {
+            $m = Valor $_.microred
+            if ([string]::IsNullOrWhiteSpace([string]$m)) { $md[([string](Valor $_.ubigeo)).Trim()] } else { $m }
+        } }
+    } else { $c }
+}
+$res | Select-Object $cols |
     Export-Csv (Join-Path $raiz "datos\indicadores.csv") -NoTypeInformation -Encoding UTF8
 
 # ---- 2. Nombres y metas -----------------------------------------------
