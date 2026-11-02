@@ -40,7 +40,7 @@
       <h2>📋 Listado de indicadores</h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>Indicador</th><th>Nombre</th><th class="n">Numerador</th><th class="n">Denominador</th><th class="n">% Cumplimiento</th><th>Estado</th><th class="col-grano">Grano</th></tr></thead>
+          <thead><tr><th>Indicador</th><th>Nombre</th><th class="n">Numerador</th><th class="n">Denominador</th><th class="n">% Cumplimiento</th><th>Estado</th><th class="n" title="Casos que faltan para alcanzar la meta con el filtro actual">Faltan</th><th class="col-grano">Grano</th></tr></thead>
           <tbody id="tInd"></tbody>
         </table>
       </div>
@@ -67,7 +67,7 @@
   </section>
 
   <footer>
-    Cumplen / En proceso / No cumplen = número de indicadores, comparando el % de cada indicador (suma de numeradores ÷ suma de denominadores) con su propia meta. Puntaje = promedio del avance respecto a la meta de cada indicador (tope 100; 100 = todas las metas alcanzadas). Se evalúan todos los indicadores con al menos un caso; con menos de 3 indicadores evaluados el puntaje se muestra atenuado y al final. Toca un indicador para ver su detalle, o un distrito para filtrarlo (tócalo otra vez para quitar el filtro).
+    Cumplen / En proceso / No cumplen = número de indicadores, comparando el % de cada indicador (suma de numeradores ÷ suma de denominadores) con su propia meta. Puntaje = promedio del avance respecto a la meta de cada indicador (tope 100; 100 = todas las metas alcanzadas). Se evalúan todos los indicadores con al menos un caso; con menos de 3 indicadores evaluados el puntaje se muestra atenuado y al final. Faltan = casos que faltan para la meta con el filtro actual (✓ = meta alcanzada). ▲▼ = cambio en puntos frente al mes anterior (verde mejora, rojo empeora). Toca un indicador para ver su detalle, o una MicroRed o distrito para filtrarlo (tócalo otra vez para quitar el filtro).
     <span id="actualizado"></span>
   </footer>
 </main>
@@ -75,6 +75,33 @@
 <script src="comun.js?v=14"></script>
 <script>
 const filtro = {periodo:TODOS, ubigeo:TODOS, microred:TODOS};
+let PERIODOS = [];
+
+// Flecha frente al mes anterior (solo cuando hay un mes elegido)
+function tendencia(c, av){
+  if (filtro.periodo === TODOS) return "";
+  const i = PERIODOS.indexOf(filtro.periodo);
+  if (i < 1) return "";
+  const ant = PERIODOS[i - 1];
+  const rs = DATOS.filter(r => r.codigo === c && r.periodo === ant &&
+    (filtro.ubigeo === TODOS || r.ubigeo === filtro.ubigeo) &&
+    (filtro.microred === TODOS || r.mr === filtro.microred));
+  const s = sumar(rs);
+  if (!s.d) return "";
+  const dif = av - s.av, ind = indDe(c);
+  const tit = `${fPer(ant)}: ${fP(s.av)}`;
+  if (Math.abs(dif) < 0.5) return ` <span class="tend" title="${esc(tit)}" style="color:var(--none)">→</span>`;
+  const mejora = esDesc(ind) ? dif < 0 : dif > 0;
+  return ` <span class="tend" title="${esc(tit)}" style="color:${mejora ? "var(--ok)" : "var(--bad)"};font-weight:700">${dif > 0 ? "▲" : "▼"}${Math.abs(dif).toFixed(1)}</span>`;
+}
+
+// Casos que faltan para llegar a la meta
+function celdaFaltan(s, ind){
+  const x = faltan(s, ind);
+  if (x == null) return `<td class="n">—</td>`;
+  if (x === 0) return `<td class="n" style="color:var(--ok);font-weight:700" title="Meta alcanzada">✓</td>`;
+  return `<td class="n" style="font-weight:700" title="Faltan ${x} casos para la meta de ${fP(ind.meta)}">${fN(x)}</td>`;
+}
 
 function filtradas(){
   return DATOS.filter(r =>
@@ -113,16 +140,16 @@ function render(){
       <td><span class="cod">${esc(c)}</span></td>
       <td>${esc(ind.nombre)}</td>
       <td class="n">${fN(s.n)}</td><td class="n">${fN(s.d)}</td>
-      <td class="n">${fP(s.av)}<span class="meta">${ind.meta != null ? `meta ${esDesc(ind) ? "≤ " : ""}${fP(ind.meta)}` : ""}</span></td>
-      <td>${pill(e)}</td><td class="col-grano">${esc(grano)}</td></tr>`;
-  }).join("") || `<tr><td colspan="7">No hay registros con estos filtros.</td></tr>`;
+      <td class="n">${fP(s.av)}${tendencia(c, s.av)}<span class="meta">${ind.meta != null ? `meta ${esDesc(ind) ? "≤ " : ""}${fP(ind.meta)}` : ""}</span></td>
+      <td>${pill(e)}</td>${celdaFaltan(s, ind)}<td class="col-grano">${esc(grano)}</td></tr>`;
+  }).join("") || `<tr><td colspan="8">No hay registros con estos filtros.</td></tr>`;
 
   // Puntaje por MicroRed: cada indicador se evalúa con la suma de la microred
   const porMr = new Map();
   for (const r of rows){ if (!porMr.has(r.mr)) porMr.set(r.mr, []); porMr.get(r.mr).push(r); }
   tMr.innerHTML = [...porMr.entries()].map(([m, rs]) => ({m, x: resumenPorIndicador(rs)}))
     .sort(ordenPuntaje)
-    .map(({m, x}) => { const p = x.puntaje; return `<tr>
+    .map(({m, x}) => { const p = x.puntaje; return `<tr class="ind" tabindex="0" data-mr="${esc(m)}" title="Filtrar ${esc(m)}">
       <td>${esc(m)}</td><td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
       <td class="n">${x.evaluados}/${x.detalle.length}</td>
       <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
@@ -139,6 +166,13 @@ function render(){
       <td class="n">${x.evaluados}/${x.detalle.length}</td>
       <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
     || `<tr><td colspan="7">Sin registros.</td></tr>`;
+}
+
+// Elegir una MicroRed desde su tabla (tocar otra vez la quita)
+function elegirMicrored(m){
+  filtro.microred = filtro.microred === m ? TODOS : m;
+  fMicrored.value = filtro.microred;
+  pintarDistritos(); guardarFiltros(); render();
 }
 
 // Elegir un distrito desde su tabla
@@ -173,7 +207,7 @@ async function iniciar(){
     document.querySelector(".grid2").innerHTML = `<div class="error"><strong>No se pudieron cargar los datos.</strong> ${esc(e.message)}</div>`;
     estadoCarga.textContent = "Sin datos"; return;
   }
-  const periodos = [...new Set(DATOS.map(r => r.periodo))].sort();
+  const periodos = PERIODOS = [...new Set(DATOS.map(r => r.periodo))].sort();
   // Periodo inicial: config.json "periodo_inicial" = "ultimo" (por defecto), "todos" o un periodo como "2026-09"
   const pi = String(CFG.periodo_inicial ?? "ultimo").toLowerCase();
   filtro.periodo = pi === "todos" ? TODOS : periodos.includes(pi) ? pi : (periodos[periodos.length - 1] ?? TODOS);
@@ -202,6 +236,8 @@ async function iniciar(){
   fMicrored.addEventListener("change", e => { filtro.microred = e.target.value; pintarDistritos(); guardarFiltros(); render(); });
   tInd.addEventListener("click", e => { const tr = e.target.closest("tr.ind"); if (tr) location.href = tr.dataset.href; });
   tInd.addEventListener("keydown", e => { const tr = e.target.closest("tr.ind"); if (tr && e.key === "Enter") location.href = tr.dataset.href; });
+  tMr.addEventListener("click", e => { const tr = e.target.closest("tr[data-mr]"); if (tr) elegirMicrored(tr.dataset.mr); });
+  tMr.addEventListener("keydown", e => { const tr = e.target.closest("tr[data-mr]"); if (tr && e.key === "Enter") elegirMicrored(tr.dataset.mr); });
   tDist.addEventListener("click", e => { const tr = e.target.closest("tr[data-ubigeo]"); if (tr) elegirDistrito(tr.dataset.ubigeo); });
   tDist.addEventListener("keydown", e => { const tr = e.target.closest("tr[data-ubigeo]"); if (tr && e.key === "Enter") elegirDistrito(tr.dataset.ubigeo); });
   render();
