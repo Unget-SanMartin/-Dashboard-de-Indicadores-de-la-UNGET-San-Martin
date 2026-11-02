@@ -23,10 +23,10 @@
 
   <section class="kpis" aria-live="polite">
     <div class="kpi"><span>Indicadores</span><b id="kInd">–</b></div>
-    <div class="kpi"><span>Registros</span><b id="kReg">–</b></div>
-    <div class="kpi ok"><span>Cumplen</span><b id="kOk">–</b></div>
-    <div class="kpi mid"><span>En proceso</span><b id="kMid">–</b></div>
-    <div class="kpi bad"><span>No cumplen</span><b id="kBad">–</b></div>
+    <div class="kpi"><span>Puntaje</span><b id="kReg">–</b></div>
+    <div class="kpi ok"><span>Indicadores que cumplen</span><b id="kOk">–</b></div>
+    <div class="kpi mid"><span>Indicadores en proceso</span><b id="kMid">–</b></div>
+    <div class="kpi bad"><span>Indicadores que no cumplen</span><b id="kBad">–</b></div>
   </section>
 
   <section class="filtros">
@@ -49,20 +49,30 @@
       <h2>📍 MicroRed</h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n">Puntaje</th></tr></thead>
+          <thead><tr><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n" title="Indicadores evaluados">Eval.</th><th class="n">Puntaje</th></tr></thead>
           <tbody id="tMr"></tbody>
         </table>
       </div>
     </section>
   </div>
 
+  <section class="tabla-card" style="margin-top:16px">
+    <h2>🗺️ Distrito</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Distrito</th><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n">Evaluados</th><th class="n">Puntaje</th></tr></thead>
+        <tbody id="tDist"></tbody>
+      </table>
+    </div>
+  </section>
+
   <footer>
-    Registros: cada indicador por mes y establecimiento (o distrito, en los indicadores distritales). Puntaje = registros que cumplen ÷ registros evaluados × 100. Toca un indicador para ver su detalle.
+    Cumplen / En proceso / No cumplen = número de indicadores, comparando el % de cada indicador (suma de numeradores ÷ suma de denominadores) con su propia meta. Puntaje = promedio del avance respecto a la meta de cada indicador (tope 100; 100 = todas las metas alcanzadas). Se evalúan todos los indicadores con al menos un caso; con menos de 3 indicadores evaluados el puntaje se muestra atenuado y al final. Toca un indicador para ver su detalle, o un distrito para filtrarlo (tócalo otra vez para quitar el filtro).
     <span id="actualizado"></span>
   </footer>
 </main>
 
-<script src="comun.js?v=12"></script>
+<script src="comun.js?v=14"></script>
 <script>
 const filtro = {periodo:TODOS, ubigeo:TODOS, microred:TODOS};
 
@@ -81,25 +91,23 @@ function enlaceDetalle(c){
   return "detalle.html?" + p;
 }
 
+// Con menos de 3 indicadores evaluados el puntaje es poco confiable: se atenúa y va al final
+const MIN_IND = 3;
+const pocos = x => x.evaluados < MIN_IND;
+const ordenPuntaje = (a, b) => (pocos(a.x) - pocos(b.x)) || ((b.x.puntaje ?? -1) - (a.x.puntaje ?? -1));
+
 function render(){
   const rows = filtradas();
-  const k = {cumple:0, proceso:0, nocumple:0};
-  const mr = new Map();
-  for (const r of rows){
-    const e = estado(avance(r), indDe(r.codigo));
-    if (!(e in k)) continue;
-    k[e]++;
-    if (!mr.has(r.mr)) mr.set(r.mr, {cumple:0, proceso:0, nocumple:0});
-    mr.get(r.mr)[e]++;
-  }
+  const R = resumenPorIndicador(rows);
+  const est = new Map(R.detalle.map(x => [x.codigo, x]));
   const codigos = [...new Set(rows.map(r => r.codigo))];
   kInd.textContent = fN(codigos.length);
-  kReg.textContent = fN(rows.length);
-  kOk.textContent = fN(k.cumple); kMid.textContent = fN(k.proceso); kBad.textContent = fN(k.nocumple);
+  kReg.textContent = R.puntaje == null ? "—" : R.puntaje.toFixed(1);
+  kOk.textContent = fN(R.cumple); kMid.textContent = fN(R.proceso); kBad.textContent = fN(R.nocumple);
 
   const orden = [...IND.keys()].filter(c => codigos.includes(c)).concat(codigos.filter(c => !IND.has(c)).sort());
   tInd.innerHTML = orden.map(c => {
-    const ind = indDe(c), rs = rows.filter(r => r.codigo === c), s = sumar(rs), e = estado(s.av, ind);
+    const ind = indDe(c), rs = rows.filter(r => r.codigo === c), s = sumar(rs), e = est.get(c)?.estado ?? estado(s.av, ind);
     const grano = ind.grano || (rs.some(r => r.eess) ? "EESS" : "Distrito");
     return `<tr class="ind" tabindex="0" data-href="${esc(enlaceDetalle(c))}" title="Ver detalle de ${esc(c)}">
       <td><span class="cod">${esc(c)}</span></td>
@@ -109,12 +117,49 @@ function render(){
       <td>${pill(e)}</td><td class="col-grano">${esc(grano)}</td></tr>`;
   }).join("") || `<tr><td colspan="7">No hay registros con estos filtros.</td></tr>`;
 
-  tMr.innerHTML = [...mr.entries()].map(([m, x]) => {
-    const t = x.cumple + x.proceso + x.nocumple; return {m, x, p: t ? x.cumple / t * 100 : 0};
-  }).sort((a, b) => b.p - a.p).map(({m, x, p}) => `<tr>
+  // Puntaje por MicroRed: cada indicador se evalúa con la suma de la microred
+  const porMr = new Map();
+  for (const r of rows){ if (!porMr.has(r.mr)) porMr.set(r.mr, []); porMr.get(r.mr).push(r); }
+  tMr.innerHTML = [...porMr.entries()].map(([m, rs]) => ({m, x: resumenPorIndicador(rs)}))
+    .sort(ordenPuntaje)
+    .map(({m, x}) => { const p = x.puntaje; return `<tr>
       <td>${esc(m)}</td><td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
-      <td class="n">${p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p}%"></i></div></td></tr>`).join("")
-    || `<tr><td colspan="5">Sin registros.</td></tr>`;
+      <td class="n">${x.evaluados}/${x.detalle.length}</td>
+      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
+    || `<tr><td colspan="6">Sin registros.</td></tr>`;
+
+  // Puntaje por distrito (mismo cálculo que MicroRed). Toca una fila para filtrar ese distrito.
+  const porDist = new Map();
+  for (const r of rows){ if (!r.ubigeo) continue; if (!porDist.has(r.ubigeo)) porDist.set(r.ubigeo, []); porDist.get(r.ubigeo).push(r); }
+  tDist.innerHTML = [...porDist.entries()].map(([u, rs]) => ({u, rs, x: resumenPorIndicador(rs)}))
+    .sort(ordenPuntaje)
+    .map(({u, rs, x}) => { const p = x.puntaje; return `<tr class="ind" tabindex="0" data-ubigeo="${esc(u)}" title="Filtrar ${esc(nomDist(rs[0]))}">
+      <td>${esc(nomDist(rs[0]))}</td><td>${esc(rs[0].mr)}</td>
+      <td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
+      <td class="n">${x.evaluados}/${x.detalle.length}</td>
+      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
+    || `<tr><td colspan="7">Sin registros.</td></tr>`;
+}
+
+// Elegir un distrito desde su tabla
+function elegirDistrito(u){
+  filtro.ubigeo = filtro.ubigeo === u ? TODOS : u;
+  const mr = DATOS.find(r => r.ubigeo === u)?.mr;
+  if (filtro.microred !== TODOS && mr && filtro.microred !== mr){ filtro.microred = TODOS; fMicrored.value = TODOS; }
+  pintarDistritos(); guardarFiltros(); render();
+}
+
+// Distritos de la MicroRed elegida (o todos)
+function pintarDistritos(){
+  const dist = new Map();
+  DATOS.forEach(r => r.ubigeo && (filtro.microred === TODOS || r.mr === filtro.microred) && dist.set(r.ubigeo, nomDist(r)));
+  if (filtro.ubigeo !== TODOS && !dist.has(filtro.ubigeo)) filtro.ubigeo = TODOS;
+  radios(fDistrito, "distrito", [{v:TODOS, t:"Todos los distritos"}, ...[...dist].sort().map(([u, d]) => ({v:u, t:d}))], filtro.ubigeo);
+}
+
+// Recordar filtros mientras la pestaña esté abierta (al volver del detalle)
+function guardarFiltros(){
+  try { sessionStorage.setItem("filtrosFED", JSON.stringify(filtro)); } catch(_){}
 }
 
 function radios(cont, nombre, opciones, actual){
@@ -128,9 +173,15 @@ async function iniciar(){
     document.querySelector(".grid2").innerHTML = `<div class="error"><strong>No se pudieron cargar los datos.</strong> ${esc(e.message)}</div>`;
     estadoCarga.textContent = "Sin datos"; return;
   }
-  // Recordar filtros al volver desde el detalle
+  const periodos = [...new Set(DATOS.map(r => r.periodo))].sort();
+  // Periodo inicial: config.json "periodo_inicial" = "ultimo" (por defecto), "todos" o un periodo como "2026-09"
+  const pi = String(CFG.periodo_inicial ?? "ultimo").toLowerCase();
+  filtro.periodo = pi === "todos" ? TODOS : periodos.includes(pi) ? pi : (periodos[periodos.length - 1] ?? TODOS);
+  // Prioridad: filtros de la URL > filtros elegidos en esta pestaña > periodo inicial
+  try { Object.assign(filtro, JSON.parse(sessionStorage.getItem("filtrosFED") || "{}")); } catch(_){}
   const q = new URLSearchParams(location.search);
   ["periodo","ubigeo","microred"].forEach(k => { if (q.get(k)) filtro[k] = q.get(k); });
+  if (filtro.periodo !== TODOS && !periodos.includes(filtro.periodo)) filtro.periodo = periodos[periodos.length - 1] ?? TODOS;
 
   if (CFG.titulo) titulo.textContent = CFG.titulo.replace(/(\d)-(\d)/g, "$1\u2011$2");
   if (CFG.subtitulo) subtitulo.textContent = CFG.subtitulo;
@@ -139,19 +190,20 @@ async function iniciar(){
   if (CFG.actualizado) actualizado.textContent = ` Datos actualizados el ${CFG.actualizado}.`;
   if (CFG.datos_de_ejemplo) aviso.innerHTML = `<p class="aviso">Datos de ejemplo. Ejecuta <strong>actualizar.ps1</strong> y cambia <strong>datos_de_ejemplo</strong> a <strong>false</strong> en datos/config.json.</p>`;
 
-  const periodos = [...new Set(DATOS.map(r => r.periodo))].sort();
-  radios(fPeriodo, "periodo", [{v:TODOS, t:"Todos los periodos"}, ...periodos.map(p => ({v:p, t:fPer(p)}))], filtro.periodo);
-  const dist = new Map(); DATOS.forEach(r => r.ubigeo && dist.set(r.ubigeo, nomDist(r)));
-  radios(fDistrito, "distrito", [{v:TODOS, t:"Todos los distritos"}, ...[...dist].sort().map(([u, d]) => ({v:u, t:d}))], filtro.ubigeo);
+  radios(fPeriodo, "periodo", [{v:TODOS, t:"Todos los periodos (acumulado)"}, ...periodos.map(p => ({v:p, t:fPer(p)}))], filtro.periodo);
   const mrs = [...new Set(DATOS.map(r => r.mr))].sort((a, b) => (a === SIN_MR) - (b === SIN_MR) || a.localeCompare(b));
   fMicrored.innerHTML = `<option value="${TODOS}">Todas las MicroRedes</option>` + mrs.map(m => `<option>${esc(m)}</option>`).join("");
+  if (![...fMicrored.options].some(o => o.value === filtro.microred)) filtro.microred = TODOS;
   fMicrored.value = filtro.microred;
+  pintarDistritos();
 
-  fPeriodo.addEventListener("change", e => { filtro.periodo = e.target.value; render(); });
-  fDistrito.addEventListener("change", e => { filtro.ubigeo = e.target.value; render(); });
-  fMicrored.addEventListener("change", e => { filtro.microred = e.target.value; render(); });
+  fPeriodo.addEventListener("change", e => { filtro.periodo = e.target.value; guardarFiltros(); render(); });
+  fDistrito.addEventListener("change", e => { filtro.ubigeo = e.target.value; guardarFiltros(); render(); });
+  fMicrored.addEventListener("change", e => { filtro.microred = e.target.value; pintarDistritos(); guardarFiltros(); render(); });
   tInd.addEventListener("click", e => { const tr = e.target.closest("tr.ind"); if (tr) location.href = tr.dataset.href; });
   tInd.addEventListener("keydown", e => { const tr = e.target.closest("tr.ind"); if (tr && e.key === "Enter") location.href = tr.dataset.href; });
+  tDist.addEventListener("click", e => { const tr = e.target.closest("tr[data-ubigeo]"); if (tr) elegirDistrito(tr.dataset.ubigeo); });
+  tDist.addEventListener("keydown", e => { const tr = e.target.closest("tr[data-ubigeo]"); if (tr && e.key === "Enter") elegirDistrito(tr.dataset.ubigeo); });
   render();
 }
 iniciar();

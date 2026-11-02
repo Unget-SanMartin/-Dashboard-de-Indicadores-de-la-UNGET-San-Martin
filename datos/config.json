@@ -2,5 +2,7 @@
   "titulo": "Dashboard de Indicadores FED 2025-26 — UNGET San Martín",
   "subtitulo": "Seguimiento de cumplimiento por indicador",
   "datos_de_ejemplo": false,
-  "factor_en_proceso": 0.8
+  "factor_en_proceso": 0.8,
+  "min_denominador": 1,
+  "periodo_inicial": "ultimo"
 }

@@ -110,3 +110,38 @@ function pintarActualizacion(){
   caja.innerHTML = `<span class="cal" aria-hidden="true">📅</span>
     <span><small>Última actualización</small><b>${esc(CFG.actualizado)}</b>${hora ? `<small>Actualizado: ${esc(hora)}</small>` : ""}</span>`;
 }
+
+/* ---------------------------------------------------------------------
+   Resumen a nivel INDICADOR (para tarjetas y puntaje por MicroRed)
+   - Agrupa las filas por indicador y suma numerador/denominador,
+     así el % sale ponderado por población y no por número de filas.
+   - Si el denominador total es menor a CFG.min_denominador (por defecto 1,
+     o sea, se evalúa todo; 0 de 0 queda "Sin datos") no entra al puntaje.
+   - Puntaje = promedio del logro respecto a la meta de cada indicador
+     (tope 100). 100 = alcanza la meta en todos los indicadores evaluados.
+--------------------------------------------------------------------- */
+const MIN_DEN = () => CFG.min_denominador ?? 1;   // 1 = se evalúa todo indicador con al menos un caso
+
+function logroMeta(av, ind){
+  if (av == null || ind.meta == null) return null;
+  if (esDesc(ind)) return av <= ind.meta ? 100 : ind.meta / av * 100;
+  return ind.meta <= 0 ? 100 : Math.min(100, av / ind.meta * 100);
+}
+
+function resumenPorIndicador(rows){
+  const g = new Map();
+  for (const r of rows){ if (!g.has(r.codigo)) g.set(r.codigo, []); g.get(r.codigo).push(r); }
+  const out = {cumple:0, proceso:0, nocumple:0, sinmeta:0, sindatos:0, detalle:[], evaluados:0, puntaje:null};
+  let suma = 0;
+  for (const [c, grp] of g){
+    const ind = indDe(c), s = sumar(grp);
+    const av = s.d >= MIN_DEN() ? s.av : null;
+    const e = estado(av, ind);
+    out[e]++;
+    const l = logroMeta(av, ind);
+    if (l != null){ suma += l; out.evaluados++; }
+    out.detalle.push({codigo:c, n:s.n, d:s.d, av, estado:e, logro:l});
+  }
+  out.puntaje = out.evaluados ? suma / out.evaluados : null;
+  return out;
+}
