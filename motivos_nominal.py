@@ -178,7 +178,7 @@ def main():
         try:
             r = procesar(ruta, reglas, metas)
             if r:
-                print(f"{r[0]:<9} motivos ok: {r[2]:>6} no cumplen" + (f", {r[3]} fuera del denominador" if r[3] else ""))
+                print(f"{r[0]:<9} motivos ok: {r[2]:>6} no cumplen" + (f", {r[3]} no aplica" if r[3] else ""))
         except Exception as e:
             print(f"{os.path.basename(ruta)}  ERROR: {e}")
             sys.exit(1)

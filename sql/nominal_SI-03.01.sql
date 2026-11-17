@@ -9,7 +9,7 @@
      - fecha_hb_en_el_mes : primer dosaje de Hb (85018, 85018.01, 85031)
                             de la adolescente en el mismo mes, si lo tuvo
                             en otro día (sirve para explicar por qué no cumple)
-     - Condicion          : CUMPLE / NO CUMPLE
+     - Condicion          : CUMPLE / NO CUMPLE / NO APLICA
    Ejecuta primero FED_2025_26_SI-03.01_JCAR_okok.sql.
    ===================================================================== */
 SET NOCOUNT ON;
@@ -30,6 +30,7 @@ SELECT t.*,
            FROM #hb h
           WHERE h.num_doc = t.num_doc
             AND CONVERT(char(6), h.fecha_hb, 112) = t.Periodo )   AS fecha_hb_en_el_mes,
-       CASE WHEN t.numerador > 0 THEN 'CUMPLE' ELSE 'NO CUMPLE' END AS Condicion
+       CASE WHEN t.denominador = 0 THEN 'NO APLICA'
+            WHEN t.numerador > 0 THEN 'CUMPLE' ELSE 'NO CUMPLE' END    AS Condicion
 FROM DataHIS.dbo.TRAMAHIS_FED2025_26_SI_0301_NOMINAL t
 WHERE t.provincia LIKE '2209%';

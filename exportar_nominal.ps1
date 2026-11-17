@@ -1,7 +1,8 @@
 # =====================================================================
 #  REPORTES NOMINALES DE TODOS LOS INDICADORES - SOLO USO LOCAL
 #  Para cada indicador guarda privado\<CODIGO>_nominal.csv
-#  con TODAS las personas (cumplen y no cumplen) y la columna Condicion.
+#  con TODAS las personas y la columna Condicion:
+#  CUMPLE / NO CUMPLE / NO APLICA (no entra al denominador).
 #  Al final motivos_nominal.py agrega 'Que pide el indicador' y
 #  'Por que no cumple' (mismo archivo que da Descargar todos).
 #    1) Si existe sql\nominal_<CODIGO>.sql, usa esa consulta.
@@ -78,10 +79,15 @@ foreach ($codigo in $codigos) {
         if ($cols -notcontains "numerador") { $faltan += $codigo; Write-Host "$codigo  $nombre no tiene columna 'numerador'" -ForegroundColor Yellow; continue }
         $where = "1 = 1"
         if ($cols -contains "provincia") { $where += " AND provincia LIKE '$Provincia%'" }
-        $t = Consultar "SELECT *, CASE WHEN numerador > 0 THEN 'CUMPLE' ELSE 'NO CUMPLE' END AS Condicion FROM $nombre WHERE $where"
+        # NO APLICA = no entra al denominador (denominador = 0); no se cuenta como incumplimiento
+        $cond = "CASE WHEN numerador > 0 THEN 'CUMPLE' ELSE 'NO CUMPLE' END"
+        if ($cols -contains "denominador") { $cond = "CASE WHEN denominador = 0 THEN 'NO APLICA' WHEN numerador > 0 THEN 'CUMPLE' ELSE 'NO CUMPLE' END" }
+        $t = Consultar "SELECT *, $cond AS Condicion FROM $nombre WHERE $where"
         Guardar $t $codigo
         $nNo = @($t.Rows | Where-Object { $_.Condicion -eq 'NO CUMPLE' }).Count
-        Write-Host ("{0,-9} {1,6} personas  ({2} no cumplen)  {3}" -f $codigo, $t.Rows.Count, $nNo, $tab.TABLE_NAME) -ForegroundColor Green
+        $nNA = @($t.Rows | Where-Object { $_.Condicion -eq 'NO APLICA' }).Count
+        $extra = if ($nNA) { ", $nNA no aplica" } else { "" }
+        Write-Host ("{0,-9} {1,6} personas  ({2} no cumplen{3})  {4}" -f $codigo, $t.Rows.Count, $nNo, $extra, $tab.TABLE_NAME) -ForegroundColor Green
     } catch {
         $faltan += $codigo
         Write-Host "$codigo  ERROR: $($_.Exception.Message)" -ForegroundColor Red
