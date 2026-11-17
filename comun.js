@@ -85,9 +85,20 @@ async function cargarDatos(){
       grano:m.grano || "", meta:aPct(m.meta), umbral:aPct(m.umbral_en_proceso), sentido:m.sentido || ""}));
   try{
     const m = await fetch("datos/actualizado.json", {cache:"no-store"});
-    if (m.ok){ const j = await m.json(); CFG.actualizado = j.actualizado; CFG.fecha_hora = j.fecha_hora; }
+    if (m.ok){ const j = await m.json(); CFG.actualizado = j.actualizado; CFG.fecha_hora = j.fecha_hora; CFG.fuentes = j.fuentes; }
   } catch(_){}
   pintarActualizacion();
+  pintarFuentes();
+}
+
+// Línea "Fuentes: HISMINSA (dd/mm/aaaa) - PN (dd/mm/aaaa) - CNV (dd/mm/aaaa)" bajo el título
+function pintarFuentes(){
+  const f = (Array.isArray(CFG.fuentes) ? CFG.fuentes : CFG.fuentes ? [CFG.fuentes] : []).filter(x => x && x.fuente);
+  const cont = document.querySelector("header .hwrap > div:not(.logo):not(.ultima)");
+  if (!f.length || !cont) return;
+  let el = document.getElementById("fuentesCorte");
+  if (!el){ el = document.createElement("small"); el.id = "fuentesCorte"; el.className = "fuentes"; cont.appendChild(el); }
+  el.innerHTML = "<b>Fuentes:</b> " + f.map(x => `<span>${esc(x.fuente)} (${esc(x.corte)})</span>`).join(" - ");
 }
 
 // Recuadro "Última actualización" en el encabezado

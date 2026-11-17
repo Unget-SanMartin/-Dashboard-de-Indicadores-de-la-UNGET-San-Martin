@@ -4,7 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Indicadores FED 2025-26 · UNGET San Martín</title>
-<link rel="stylesheet" href="estilos.css?v=12">
+<link rel="stylesheet" href="estilos.css?v=14">
+<style>
+/* ---- Barra de filtros (fija arriba al bajar) ---- */
+.filtros{position:sticky; top:0; z-index:5; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) auto;
+  gap:12px 16px; align-items:end; background:var(--card); border-radius:10px; border-left:4px solid var(--azul);
+  padding:14px 18px; margin-bottom:16px; box-shadow:0 2px 10px rgba(20,40,70,.12)}
+.f-lbl{display:block; font-size:.78rem; font-weight:700; color:var(--muted); letter-spacing:.3px; margin-bottom:6px}
+.btn-limpiar:focus-visible{outline:3px solid var(--azul2); outline-offset:2px}
+.f-sel select{padding:8px 10px}
+.btn-limpiar{font:inherit; font-size:.85rem; font-weight:700; padding:9px 14px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--bad); cursor:pointer; white-space:nowrap}
+.btn-limpiar:hover{background:#fdecea; border-color:var(--bad)}
+.btn-limpiar[hidden]{display:none}
+.viendo{grid-column:1/-1; margin:0; padding-top:10px; border-top:1px solid var(--line); font-size:.85rem; color:var(--muted)}
+.viendo b{color:var(--ink); font-weight:600}
+@media (max-width:1100px){ .filtros{grid-template-columns:1fr 1fr} }
+.f-sel select option:disabled{color:#9aa6b2}
+.panel{background:var(--card); border-radius:10px; border-left:4px solid var(--azul); padding:14px 16px; box-shadow:0 1px 4px rgba(20,40,70,.08)}
+.panel h2{margin:0 0 10px; font-size:1.05rem}
+.lista{max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:6px; padding:6px 10px}
+.lista label{display:flex; gap:8px; align-items:center; padding:4px 0; cursor:pointer}
+select{width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink)}
+input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px solid var(--azul2); outline-offset:2px}
+@media (max-width:760px){ .filtros{grid-template-columns:1fr; position:static} }
+</style>
 </head>
 <body>
 <header>
@@ -21,18 +44,29 @@
 <main>
   <div id="aviso"></div>
 
+  <section class="filtros" aria-label="Filtros">
+    <div class="f-sel">
+      <label class="f-lbl" for="fPeriodo">📅 Periodo</label>
+      <select id="fPeriodo"></select>
+    </div>
+    <div class="f-sel">
+      <label class="f-lbl" for="fMicrored">🏥 MicroRed</label>
+      <select id="fMicrored"></select>
+    </div>
+    <div class="f-sel">
+      <label class="f-lbl" for="fDistrito">📍 Distrito</label>
+      <select id="fDistrito"></select>
+    </div>
+    <button type="button" class="btn-limpiar" id="fLimpiar">✕ Limpiar</button>
+    <p class="viendo" id="fViendo" aria-live="polite"></p>
+  </section>
+
   <section class="kpis" aria-live="polite">
     <div class="kpi"><span>Indicadores</span><b id="kInd">–</b></div>
     <div class="kpi"><span>Puntaje</span><b id="kReg">–</b></div>
     <div class="kpi ok"><span>Indicadores que cumplen</span><b id="kOk">–</b></div>
     <div class="kpi mid"><span>Indicadores en proceso</span><b id="kMid">–</b></div>
     <div class="kpi bad"><span>Indicadores que no cumplen</span><b id="kBad">–</b></div>
-  </section>
-
-  <section class="filtros">
-    <div class="panel"><h2>📅 Periodo</h2><div class="lista" id="fPeriodo" role="radiogroup" aria-label="Periodo"></div></div>
-    <div class="panel"><h2>📍 Distrito</h2><div class="lista" id="fDistrito" role="radiogroup" aria-label="Distrito"></div></div>
-    <div class="panel"><h2>🏥 MicroRed</h2><select id="fMicrored" aria-label="MicroRed"></select></div>
   </section>
 
   <div class="grid2">
@@ -72,7 +106,7 @@
   </footer>
 </main>
 
-<script src="comun.js?v=14"></script>
+<script src="comun.js?v=15"></script>
 <script>
 const filtro = {periodo:TODOS, ubigeo:TODOS, microred:TODOS};
 let PERIODOS = [];
@@ -120,10 +154,16 @@ function enlaceDetalle(c){
 
 // Con menos de 3 indicadores evaluados el puntaje es poco confiable: se atenúa y va al final
 const MIN_IND = 3;
+
+// Mes actual (aún abierto): sus datos están incompletos
+const HOY = new Date();
+const MES_EN_CURSO = `${HOY.getFullYear()}-${String(HOY.getMonth() + 1).padStart(2, "0")}`;
+const enCurso = p => p === MES_EN_CURSO ? " (en curso)" : "";
 const pocos = x => x.evaluados < MIN_IND;
 const ordenPuntaje = (a, b) => (pocos(a.x) - pocos(b.x)) || ((b.x.puntaje ?? -1) - (a.x.puntaje ?? -1));
 
 function render(){
+  sincronizarFiltros();
   const rows = filtradas();
   const R = resumenPorIndicador(rows);
   const est = new Map(R.detalle.map(x => [x.codigo, x]));
@@ -171,7 +211,6 @@ function render(){
 // Elegir una MicroRed desde su tabla (tocar otra vez la quita)
 function elegirMicrored(m){
   filtro.microred = filtro.microred === m ? TODOS : m;
-  fMicrored.value = filtro.microred;
   pintarDistritos(); guardarFiltros(); render();
 }
 
@@ -179,7 +218,7 @@ function elegirMicrored(m){
 function elegirDistrito(u){
   filtro.ubigeo = filtro.ubigeo === u ? TODOS : u;
   const mr = DATOS.find(r => r.ubigeo === u)?.mr;
-  if (filtro.microred !== TODOS && mr && filtro.microred !== mr){ filtro.microred = TODOS; fMicrored.value = TODOS; }
+  if (filtro.microred !== TODOS && mr && filtro.microred !== mr) filtro.microred = TODOS;
   pintarDistritos(); guardarFiltros(); render();
 }
 
@@ -188,17 +227,45 @@ function pintarDistritos(){
   const dist = new Map();
   DATOS.forEach(r => r.ubigeo && (filtro.microred === TODOS || r.mr === filtro.microred) && dist.set(r.ubigeo, nomDist(r)));
   if (filtro.ubigeo !== TODOS && !dist.has(filtro.ubigeo)) filtro.ubigeo = TODOS;
-  radios(fDistrito, "distrito", [{v:TODOS, t:"Todos los distritos"}, ...[...dist].sort().map(([u, d]) => ({v:u, t:d}))], filtro.ubigeo);
+  fDistrito.innerHTML = `<option value="${TODOS}">Todos los distritos</option>` +
+    [...dist].sort().map(([u, d]) => `<option value="${esc(u)}">${esc(d)}</option>`).join("");
+  fDistrito.value = filtro.ubigeo;
+}
+
+// Lista de periodos (el más reciente primero). Los meses sin datos hasta hoy salen en gris
+function pintarPeriodos(){
+  const nom = p => { const t = fPer(p); return t[0].toUpperCase() + t.slice(1) + enCurso(p); };
+  const pendientes = [];
+  const ult = PERIODOS[PERIODOS.length - 1];
+  if (ult){
+    const hoy = new Date(), hasta = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    let [a, m] = ult.split("-").map(Number);
+    for (;;){ m++; if (m > 12){ m = 1; a++; } const p = `${a}-${String(m).padStart(2, "0")}`; if (p > hasta) break; pendientes.push(p); }
+  }
+  fPeriodo.innerHTML =
+    `<option value="${TODOS}">Todos los periodos (acumulado)</option>` +
+    pendientes.reverse().map(p => `<option disabled>${esc(nom(p))} (sin datos aún)</option>`).join("") +
+    [...PERIODOS].reverse().map(p => `<option value="${p}">${esc(nom(p))}</option>`).join("");
+}
+
+// Deja los controles y la línea "Viendo" iguales al filtro actual
+function sincronizarFiltros(){
+  fPeriodo.value = filtro.periodo;
+  fMicrored.value = filtro.microred;
+  fDistrito.value = filtro.ubigeo;
+  const r = filtro.ubigeo !== TODOS ? DATOS.find(x => x.ubigeo === filtro.ubigeo) : null;
+  const partes = [
+    filtro.periodo === TODOS ? "Todos los periodos (acumulado)" : fPer(filtro.periodo) + enCurso(filtro.periodo),
+    filtro.microred === TODOS ? "Todas las MicroRedes" : filtro.microred,
+    filtro.ubigeo === TODOS ? "Todos los distritos" : (r ? nomDist(r) : filtro.ubigeo)
+  ];
+  fViendo.innerHTML = "Viendo: " + partes.map(t => `<b>${esc(t)}</b>`).join(" · ");
+  fLimpiar.hidden = filtro.periodo === TODOS && filtro.microred === TODOS && filtro.ubigeo === TODOS;
 }
 
 // Recordar filtros mientras la pestaña esté abierta (al volver del detalle)
 function guardarFiltros(){
   try { sessionStorage.setItem("filtrosFED", JSON.stringify(filtro)); } catch(_){}
-}
-
-function radios(cont, nombre, opciones, actual){
-  cont.innerHTML = opciones.map(o =>
-    `<label><input type="radio" name="${nombre}" value="${esc(o.v)}" ${o.v === actual ? "checked" : ""}> ${esc(o.t)}</label>`).join("");
 }
 
 async function iniciar(){
@@ -208,9 +275,12 @@ async function iniciar(){
     estadoCarga.textContent = "Sin datos"; return;
   }
   const periodos = PERIODOS = [...new Set(DATOS.map(r => r.periodo))].sort();
-  // Periodo inicial: config.json "periodo_inicial" = "ultimo" (por defecto), "todos" o un periodo como "2026-09"
+  // Periodo inicial: config.json "periodo_inicial" = "ultimo" (último mes cerrado, por defecto), "todos" o un periodo como "2026-09"
   const pi = String(CFG.periodo_inicial ?? "ultimo").toLowerCase();
-  filtro.periodo = pi === "todos" ? TODOS : periodos.includes(pi) ? pi : (periodos[periodos.length - 1] ?? TODOS);
+  // "ultimo" = último mes cerrado (se salta el mes en curso si hay uno anterior)
+  const cerrados = periodos.filter(p => p < MES_EN_CURSO);
+  const ultimoCerrado = cerrados[cerrados.length - 1] ?? periodos[periodos.length - 1] ?? TODOS;
+  filtro.periodo = pi === "todos" ? TODOS : periodos.includes(pi) ? pi : ultimoCerrado;
   // Prioridad: filtros de la URL > filtros elegidos en esta pestaña > periodo inicial
   try { Object.assign(filtro, JSON.parse(sessionStorage.getItem("filtrosFED") || "{}")); } catch(_){}
   const q = new URLSearchParams(location.search);
@@ -224,16 +294,19 @@ async function iniciar(){
   if (CFG.actualizado) actualizado.textContent = ` Datos actualizados el ${CFG.actualizado}.`;
   if (CFG.datos_de_ejemplo) aviso.innerHTML = `<p class="aviso">Datos de ejemplo. Ejecuta <strong>actualizar.ps1</strong> y cambia <strong>datos_de_ejemplo</strong> a <strong>false</strong> en datos/config.json.</p>`;
 
-  radios(fPeriodo, "periodo", [{v:TODOS, t:"Todos los periodos (acumulado)"}, ...periodos.map(p => ({v:p, t:fPer(p)}))], filtro.periodo);
+  pintarPeriodos();
   const mrs = [...new Set(DATOS.map(r => r.mr))].sort((a, b) => (a === SIN_MR) - (b === SIN_MR) || a.localeCompare(b));
   fMicrored.innerHTML = `<option value="${TODOS}">Todas las MicroRedes</option>` + mrs.map(m => `<option>${esc(m)}</option>`).join("");
   if (![...fMicrored.options].some(o => o.value === filtro.microred)) filtro.microred = TODOS;
-  fMicrored.value = filtro.microred;
   pintarDistritos();
 
   fPeriodo.addEventListener("change", e => { filtro.periodo = e.target.value; guardarFiltros(); render(); });
   fDistrito.addEventListener("change", e => { filtro.ubigeo = e.target.value; guardarFiltros(); render(); });
   fMicrored.addEventListener("change", e => { filtro.microred = e.target.value; pintarDistritos(); guardarFiltros(); render(); });
+  fLimpiar.addEventListener("click", () => {
+    filtro.periodo = TODOS; filtro.microred = TODOS; filtro.ubigeo = TODOS;
+    pintarDistritos(); guardarFiltros(); render();
+  });
   tInd.addEventListener("click", e => { const tr = e.target.closest("tr.ind"); if (tr) location.href = tr.dataset.href; });
   tInd.addEventListener("keydown", e => { const tr = e.target.closest("tr.ind"); if (tr && e.key === "Enter") location.href = tr.dataset.href; });
   tMr.addEventListener("click", e => { const tr = e.target.closest("tr[data-mr]"); if (tr) elegirMicrored(tr.dataset.mr); });

@@ -2,6 +2,8 @@
 #  REPORTES NOMINALES DE TODOS LOS INDICADORES - SOLO USO LOCAL
 #  Para cada indicador guarda privado\<CODIGO>_nominal.csv
 #  con TODAS las personas (cumplen y no cumplen) y la columna Condicion.
+#  Al final motivos_nominal.py agrega 'Que pide el indicador' y
+#  'Por que no cumple' (mismo archivo que da Descargar todos).
 #    1) Si existe sql\nominal_<CODIGO>.sql, usa esa consulta.
 #    2) Si no, busca la tabla TRAMAHIS_..._<CLAVE>_NOMINAL
 #       (ej. MC-01.01 -> MC_0101) y exporta todas sus filas.
@@ -90,5 +92,15 @@ if ($faltan) {
     Write-Host "`nSin reporte: $($faltan -join ', ')" -ForegroundColor Yellow
     Write-Host "Tablas NOMINAL encontradas en $BaseDatos :"
     $tablas.Rows | ForEach-Object { Write-Host "   $($_.TABLE_NAME)" }
+}
+# Columnas "Que pide el indicador" y "Por que no cumple" (igual que "Descargar todos" del dashboard)
+# Reglas en reglas_nominal.json; las aplica motivos_nominal.py
+$py = Join-Path $raiz "motivos_nominal.py"
+if (Test-Path $py) {
+    Write-Host "`nAgregando 'Que pide el indicador' y 'Por que no cumple'..." -ForegroundColor Cyan
+    try {
+        & python $py $raiz
+        if ($LASTEXITCODE -ne 0) { Write-Host "No se pudieron agregar los motivos (ver mensaje arriba)" -ForegroundColor Yellow }
+    } catch { Write-Host "No se encontro Python: los nominales quedan sin motivos" -ForegroundColor Yellow }
 }
 Write-Host "`nListo (solo local). Recarga la pagina con Ctrl+F5."

@@ -1,1 +1,18 @@
-﻿{ "actualizado": "17/11/2026", "fecha_hora": "2026-11-17T08:05:59" }
+﻿{
+    "actualizado":  "17/11/2026",
+    "fecha_hora":  "2026-11-17T11:23:12",
+    "fuentes":  [
+                    {
+                        "fuente":  "HISMINSA",
+                        "corte":  "16/11/2026"
+                    },
+                    {
+                        "fuente":  "PN",
+                        "corte":  "16/11/2026"
+                    },
+                    {
+                        "fuente":  "CNV",
+                        "corte":  "16/11/2026"
+                    }
+                ]
+}

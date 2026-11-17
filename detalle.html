@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Detalle del indicador · UNGET San Martín</title>
-<link rel="stylesheet" href="estilos.css?v=12">
+<link rel="stylesheet" href="estilos.css?v=13">
 </head>
 <body>
 <header>
@@ -42,7 +42,7 @@
   </section>
 </main>
 
-<script src="comun.js?v=12"></script>
+<script src="comun.js?v=16"></script>
 <script>
 const q = new URLSearchParams(location.search);
 const COD = q.get("indicador");
@@ -55,6 +55,7 @@ let pestaña = "actividad", base = [];
    los botones de descarga no aparecen. */
 const ES_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 let NOM = null, NC = {};
+const ORDEN = new Map();
 let LISTAS = [];                       // personas por fila de la tabla actual
 const normal = t => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 const colDe = (cols, ...res) => { for (const re of res){ const c = cols.find(x => re.test(x)); if (c) return c; } return null; };
@@ -67,6 +68,9 @@ async function cargarNominal(){
     if (!r.ok) return;
     NOM = parseCSV(await r.text(), true);
     if (!NOM.length){ NOM = null; return; }
+    // El archivo ya viene con DNI como ="..." (formato Excel): se guarda el valor limpio
+    for (const p of NOM) for (const k in p){ const m = /^="?([^"]*)"?$/.exec(p[k]); if (m) p[k] = m[1]; }
+    NOM.forEach((p, i) => ORDEN.set(p, i));      // para descargar en el mismo orden del archivo
     const cols = Object.keys(NOM[0]);
     NC = {
       ubi:  colDe(cols, /^ubigeo$/i, /ubigeo/i),
@@ -105,11 +109,95 @@ function personasDe(r){
     return m.startsWith("MES-") ? m.slice(4) === r.periodo.slice(5) : m === r.periodo;
   });
 }
+/* ---------- "Qué pide el indicador" y "Por qué no cumple" ----------
+   Se arma solo con las columnas de criterios del reporte nominal:
+   columnas numerador_X (o num_X, cumple_X) con valores 0/1 o SI/NO.
+   Si hay columnas "resumen" (sin fecha_ propia) y columnas de detalle
+   (con su fecha_), se usan las de detalle para explicar el motivo.
+   Si en datos/indicadores_meta.json el indicador tiene "requisito",
+   ese texto se usa como "Qué pide el indicador". */
+const ETIQ = {examenes1trim:"Exámenes del 1er trimestre", apn:"Atenciones prenatales", sulfato:"Sulfato ferroso",
+  dosaje_hb:"Dosaje de Hb", tamizaje_sifilis:"Tamizaje de sífilis", tamizaje_vih:"Tamizaje de VIH",
+  tamizaje_bacteriuria:"Tamizaje de bacteriuria", perfil_obstetrico:"Perfil obstétrico"};
+const ORD = n => ["", "1er", "2do", "3er", "4to", "5to", "6to"][n] || n + "°";
+function etiqueta(c){
+  let s = c.replace(/^(numerador|num|cumple|flag)_/i, "");
+  const k = s.toLowerCase();
+  if (ETIQ[k]) return ETIQ[k];
+  let m;
+  if ((m = /^(\d)trim_(\d)apn$/i.exec(s))) return `${ORD(+m[2])} APN del ${ORD(+m[1])} trimestre`;
+  if ((m = /^(sulfato|sultafo)_?(\d+)$/i.exec(s))) return `Sulfato ferroso (entrega ${m[2]})`;
+  s = s.replace(/_/g, " ").replace(/([a-záéíóú])(\d)/gi, "$1 $2").replace(/(\d)([a-z])/gi, "$1 $2").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const firma = t => t.toLowerCase().replace(/[^a-z0-9]/g, "").split("").sort().join("");
+const esNo = v => /^(0|no|n|false|no cumple)$/i.test(String(v ?? "").trim());
+const esSiNo = v => /^(0|1|si|sí|no|s|n|true|false)$/i.test(String(v ?? "").trim());
+function criterios(personas){
+  const cols = Object.keys(personas[0]);
+  const cand = cols.filter(c => /^(numerador|num|cumple|flag)_./i.test(c) &&
+    personas.every(p => !String(p[c] ?? "").trim() || esSiNo(p[c])));
+  const fechas = new Set(cols.filter(c => /^fecha_/i.test(c)).map(c => firma(c.slice(6))));
+  const detalle = cand.filter(c => fechas.has(firma(c.replace(/^(numerador|num|cumple|flag)_/i, ""))));
+  return detalle.length ? detalle : cand;
+}
+// "Sulfato ferroso (entrega 2); ... (entrega 5)" -> "Sulfato ferroso (entregas 2, 3, 4, 5)"
+function juntar(etqs){
+  const out = [], grupos = new Map();
+  for (const e of etqs){
+    const m = /^(.*) \(entrega (\d+)\)$/.exec(e);
+    if (!m){ out.push(e); continue; }
+    if (!grupos.has(m[1])){ grupos.set(m[1], []); out.push({g:m[1]}); }
+    grupos.get(m[1]).push(m[2]);
+  }
+  return out.map(x => typeof x === "string" ? x :
+    `${x.g} (${grupos.get(x.g).length > 1 ? "entregas " + grupos.get(x.g).join(", ") : "entrega " + grupos.get(x.g)[0]})`).join("; ");
+}
+const denCero = p => String(p.denominador ?? "").trim() === "0";
+const cumpleP = p => NC.cond ? !/^no/i.test(p[NC.cond]) : String(p.numerador ?? "").trim() === "1";
+function conMotivo(personas){
+  // motivos_nominal.py ya dejó las columnas en el archivo: se usan tal cual (mismo reporte)
+  if (personas.length && "Qué pide el indicador" in personas[0]) return personas;
+  const ind = indDe(COD), R = (typeof REGLAS !== "undefined" && REGLAS[COD]) || null;
+  const lista = pares => juntar(pares.map(x => x[1]));
+  let pide, req;
+  if (R){
+    req = p => {
+      if (!R.etapas) return R.criterios || [];
+      const k = parseInt(String(p[R.etapa] ?? ""), 10) || R.etapas.length;
+      return R.etapas.slice(0, k).flat();
+    };
+    pide = R.pide || ind.nombre;
+  } else {
+    const crit = criterios(personas).map(c => [c, etiqueta(c)]);
+    req = () => crit;
+    pide = ind.requisito || (crit.length ? "Debe tener: " + lista(crit) : ind.nombre);
+  }
+  if (ind.requisito) pide = ind.requisito;
+  return personas.map(p => {
+    let motivo = "";
+    if (denCero(p)){
+      const f = (R && R.fuera || []).find(([c, , v]) => v == null ? esNo(p[c]) : String(p[c] ?? "").trim() === v);
+      motivo = "No entra al indicador (no es parte del denominador)" + (f ? ": " + f[1] : "");
+    } else if (!cumpleP(p)){
+      const especial = R && R.motivo ? R.motivo(p) : null;
+      const falta = req(p).filter(([c]) => c in p && esNo(p[c]));
+      motivo = especial || (falta.length ? "Falta: " + lista(falta) : "No cumple (revisar fechas o plazos del indicador)");
+    }
+    // las dos columnas van justo después de Condicion
+    const o = {}; let puesto = false;
+    for (const k of Object.keys(p)){ o[k] = p[k]; if (k === NC.cond){ o["Qué pide el indicador"] = pide; o["Por qué no cumple"] = motivo; puesto = true; } }
+    if (!puesto){ o["Qué pide el indicador"] = pide; o["Por qué no cumple"] = motivo; }
+    return o;
+  });
+}
+
 function descargar(personas, nombre){
   if (!personas.length){ alert("No hay personas para descargar en esta fila."); return; }
-  if (NC.cond) personas = [...personas].sort((a, b) => (/^no/i.test(b[NC.cond]) ? 1 : 0) - (/^no/i.test(a[NC.cond]) ? 1 : 0));
+  const grupo = p => denCero(p) ? 2 : cumpleP(p) ? 1 : 0;   // no cumple, cumple, fuera del indicador
+  personas = conMotivo([...personas].sort((a, b) => grupo(a) - grupo(b) || (ORDEN.get(a) ?? 0) - (ORDEN.get(b) ?? 0)));
   const cols = Object.keys(personas[0]);
-  const celda = v => { v = String(v ?? ""); return /[;"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  const celda = v => { v = String(v ?? ""); return /[;,"\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const valor = (p, c) => NC.doc.includes(c) && p[c] ? `="${p[c]}"` : celda(p[c]);   // DNI como texto
   const texto = "\uFEFF" + [cols.map(celda).join(";"), ...personas.map(p => cols.map(c => valor(p, c)).join(";"))].join("\r\n");
   const a = document.createElement("a");
@@ -135,7 +223,7 @@ function conReporte(rs, cab, fila, vacio){
       <button type="button" class="btn-rep todo" data-i="todo">⬇ Descargar todos (${fN(todas.length)})</button></div>` : "")
     + tabla(c, cuerpo);
 }
-const cuentaNo = l => NC.cond ? l.filter(p => /^no/i.test(p[NC.cond])).length : null;
+const cuentaNo = l => NC.cond ? l.filter(p => !denCero(p) && /^no/i.test(p[NC.cond])).length : null;   // sin contar los que no entran al denominador
 const btnRep = (i, k, l) => `<button type="button" class="btn-rep" data-i="${i}" title="Descargar personas (cumplen y no cumplen)">⬇ ${fN(k)}${l && cuentaNo(l) != null ? ` · ✘${fN(cuentaNo(l))}` : ""}</button>`;
 const enFiltro = r => r.codigo === COD &&
   (!F.ubigeo || r.ubigeo === F.ubigeo) && (!F.microred || r.mr === F.microred);
