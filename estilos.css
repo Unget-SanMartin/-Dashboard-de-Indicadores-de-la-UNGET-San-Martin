@@ -108,3 +108,8 @@ footer{margin-top:18px; color:var(--muted); font-size:.82rem}
 .btn-rep.todo{background:var(--bad); font-size:.85rem; padding:8px 14px}
 .barra-rep{display:flex; justify-content:space-between; align-items:center; gap:12px; padding:0 16px 12px; flex-wrap:wrap}
 .local{display:inline-block; background:#fdecea; color:#a3261a; border-radius:4px; padding:2px 8px; font-size:.75rem; font-weight:700}
+
+/* ---- Botón "Descargar reportes" (abre la carpeta de Google Drive) ---- */
+.btn-reportes{display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:700; padding:9px 14px; border-radius:6px; background:var(--azul); color:#fff; text-decoration:none; white-space:nowrap}
+.btn-reportes:hover{background:var(--navy)}
+.btn-reportes:focus-visible{outline:3px solid var(--azul2); outline-offset:2px}
