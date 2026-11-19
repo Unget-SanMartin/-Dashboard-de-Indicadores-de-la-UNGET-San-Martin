@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Indicadores FED 2025-26 · UNGET San Martín</title>
+<title>Tablero de Cumplimiento de Metas FED — Red de Salud San Martín</title>
 <link rel="stylesheet" href="estilos.css?v=15">
 <style>
 /* ---- Barra de filtros (fija arriba al bajar) ---- */
@@ -35,7 +35,7 @@ input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px 
   <div class="hwrap">
     <div class="logo"><img src="logo-unget.jpg" alt="UNGET San Martín"></div>
     <div>
-      <h1 id="titulo">Indicadores FED 2025-26</h1>
+      <h1 id="titulo">Tablero de Cumplimiento de Metas FED</h1>
       <p id="subtitulo">Seguimiento de cumplimiento por indicador</p>
       <small id="estadoCarga">Cargando datos…</small>
     </div>
@@ -295,8 +295,12 @@ async function iniciar(){
   ["periodo","ubigeo","microred"].forEach(k => { if (q.get(k)) filtro[k] = q.get(k); });
   if (filtro.periodo !== TODOS && !periodos.includes(filtro.periodo)) filtro.periodo = periodos[periodos.length - 1] ?? TODOS;
 
-  if (CFG.titulo) titulo.textContent = CFG.titulo.replace(/(\d)-(\d)/g, "$1\u2011$2");
-  if (CFG.subtitulo) subtitulo.textContent = CFG.subtitulo;
+  // Año automático: {anio} = año del último periodo con datos (ej. 2026), {anio_anterior} = el anterior (2025).
+  // Ej.: "FED 2025-{anio}" -> 2025-2026 ahora y 2025-2027 cuando lleguen datos de 2027.
+  const ANIO = Number((periodos[periodos.length - 1] || "").slice(0, 4)) || new Date().getFullYear();
+  const conAnio = t => String(t).replace(/\{anio_anterior\}/g, ANIO - 1).replace(/\{anio\}/g, ANIO);
+  if (CFG.titulo) titulo.textContent = conAnio(CFG.titulo).replace(/(\d)-(\d)/g, "$1\u2011$2");
+  if (CFG.subtitulo) subtitulo.textContent = conAnio(CFG.subtitulo);
   document.title = titulo.textContent;
   estadoCarga.textContent = `● ${fN(DATOS.length)} registros`;
   if (CFG.actualizado) actualizado.textContent = ` Datos actualizados el ${CFG.actualizado}.`;

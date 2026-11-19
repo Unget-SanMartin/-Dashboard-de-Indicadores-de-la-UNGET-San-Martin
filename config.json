@@ -1,0 +1,8 @@
+{
+  "titulo": "Tablero de Cumplimiento de Metas FED 2025-{anio} — Red de Salud San Martín",
+  "subtitulo": "Seguimiento de cumplimiento por indicador",
+  "datos_de_ejemplo": false,
+  "factor_en_proceso": 0.8,
+  "min_denominador": 1,
+  "periodo_inicial": "ultimo"
+}
