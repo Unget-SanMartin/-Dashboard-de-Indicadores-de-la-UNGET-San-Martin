@@ -113,3 +113,5 @@ footer{margin-top:18px; color:var(--muted); font-size:.82rem}
 .btn-reportes{display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:700; padding:9px 14px; border-radius:6px; background:var(--azul); color:#fff; text-decoration:none; white-space:nowrap}
 .btn-reportes:hover{background:var(--navy)}
 .btn-reportes:focus-visible{outline:3px solid var(--azul2); outline-offset:2px}
+
+.kpi .kpi-det{display:block; font-size:.78rem; color:var(--muted); margin-top:2px}
