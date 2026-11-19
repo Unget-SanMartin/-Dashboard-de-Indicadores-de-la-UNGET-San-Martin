@@ -299,7 +299,8 @@ async function iniciar(){
   // Ej.: "FED 2025-{anio}" -> 2025-2026 ahora y 2025-2027 cuando lleguen datos de 2027.
   const ANIO = Number((periodos[periodos.length - 1] || "").slice(0, 4)) || new Date().getFullYear();
   const conAnio = t => String(t).replace(/\{anio_anterior\}/g, ANIO - 1).replace(/\{anio\}/g, ANIO);
-  if (CFG.titulo) titulo.textContent = conAnio(CFG.titulo).replace(/(\d)-(\d)/g, "$1\u2011$2");
+  // Título fijo en el código (ya no depende de config.json): el 2025 queda fijo y el segundo año cambia solo
+  titulo.textContent = `Tablero de Cumplimiento de Metas FED 2025\u2011${ANIO} — Red de Salud San Martín`;
   if (CFG.subtitulo) subtitulo.textContent = conAnio(CFG.subtitulo);
   document.title = titulo.textContent;
   estadoCarga.textContent = `● ${fN(DATOS.length)} registros`;
