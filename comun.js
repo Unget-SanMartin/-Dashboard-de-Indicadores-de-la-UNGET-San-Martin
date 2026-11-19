@@ -128,8 +128,8 @@ function pintarActualizacion(){
      así el % sale ponderado por población y no por número de filas.
    - Si el denominador total es menor a CFG.min_denominador (por defecto 1,
      o sea, se evalúa todo; 0 de 0 queda "Sin datos") no entra al puntaje.
-   - Puntaje = promedio del logro respecto a la meta de cada indicador
-     (tope 100). 100 = alcanza la meta en todos los indicadores evaluados.
+   - Puntaje = indicadores que cumplen × 100 ÷ indicadores evaluados
+     (ej.: 5 cumplen de 14 → 5 × 100 ÷ 14 = 35.7).
 --------------------------------------------------------------------- */
 const MIN_DEN = () => CFG.min_denominador ?? 1;   // 1 = se evalúa todo indicador con al menos un caso
 
@@ -153,6 +153,6 @@ function resumenPorIndicador(rows){
     if (l != null){ suma += l; out.evaluados++; }
     out.detalle.push({codigo:c, n:s.n, d:s.d, av, estado:e, logro:l});
   }
-  out.puntaje = out.evaluados ? suma / out.evaluados : null;
+  out.puntaje = out.evaluados ? out.cumple * 100 / out.evaluados : null;
   return out;
 }
