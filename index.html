@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Indicadores FED 2025-26 · UNGET San Martín</title>
+<title>Tablero de Cumplimiento de Metas FED — Red de Salud San Martín</title>
 <link rel="stylesheet" href="estilos.css?v=15">
 <style>
 /* ---- Barra de filtros (fija arriba al bajar) ---- */
@@ -35,7 +35,7 @@ input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px 
   <div class="hwrap">
     <div class="logo"><img src="logo-unget.jpg" alt="UNGET San Martín"></div>
     <div>
-      <h1 id="titulo">Indicadores FED 2025-26</h1>
+      <h1 id="titulo">Tablero de Cumplimiento de Metas FED</h1>
       <p id="subtitulo">Seguimiento de cumplimiento por indicador</p>
       <small id="estadoCarga">Cargando datos…</small>
     </div>
@@ -70,7 +70,7 @@ input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px 
 
   <section class="kpis" aria-live="polite">
     <div class="kpi"><span>Indicadores</span><b id="kInd">–</b></div>
-    <div class="kpi"><span>Puntaje</span><b id="kReg">–</b></div>
+    <div class="kpi"><span>% de cumplimiento</span><b id="kReg">–</b><small id="kRegDet" class="kpi-det"></small></div>
     <div class="kpi ok"><span>Indicadores que cumplen</span><b id="kOk">–</b></div>
     <div class="kpi mid"><span>Indicadores en proceso</span><b id="kMid">–</b></div>
     <div class="kpi bad"><span>Indicadores que no cumplen</span><b id="kBad">–</b></div>
@@ -90,7 +90,7 @@ input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px 
       <h2>📍 MicroRed</h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n" title="Indicadores evaluados">Eval.</th><th class="n">Puntaje</th></tr></thead>
+          <thead><tr><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n" title="Indicadores evaluados">Eval.</th><th class="n">% Cumpl.</th></tr></thead>
           <tbody id="tMr"></tbody>
         </table>
       </div>
@@ -101,14 +101,14 @@ input:focus-visible,select:focus-visible,tr[tabindex]:focus-visible{outline:3px 
     <h2>🗺️ Distrito</h2>
     <div class="scroll">
       <table>
-        <thead><tr><th>Distrito</th><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n">Evaluados</th><th class="n">Puntaje</th></tr></thead>
+        <thead><tr><th>Distrito</th><th>MicroRed</th><th class="n">Cumplen</th><th class="n">En proceso</th><th class="n">No cumplen</th><th class="n">Evaluados</th><th class="n">% Cumpl.</th></tr></thead>
         <tbody id="tDist"></tbody>
       </table>
     </div>
   </section>
 
   <footer>
-    Cumplen / En proceso / No cumplen = número de indicadores, comparando el % de cada indicador (suma de numeradores ÷ suma de denominadores) con su propia meta. Puntaje = promedio del avance respecto a la meta de cada indicador (tope 100; 100 = todas las metas alcanzadas). Se evalúan todos los indicadores con al menos un caso; con menos de 3 indicadores evaluados el puntaje se muestra atenuado y al final. Faltan = casos que faltan para la meta con el filtro actual (✓ = meta alcanzada). ▲▼ = cambio en puntos frente al mes anterior (verde mejora, rojo empeora). Toca un indicador para ver su detalle, o una MicroRed o distrito para filtrarlo (tócalo otra vez para quitar el filtro).
+    Cumplen / En proceso / No cumplen = número de indicadores, comparando el % de cada indicador (suma de numeradores ÷ suma de denominadores) con su propia meta. % de cumplimiento = indicadores que cumplen × 100 ÷ indicadores evaluados (ej.: 5 de 14 → 35.7%; 100% = todos cumplen). Se evalúan todos los indicadores con al menos un caso; con menos de 3 indicadores evaluados el puntaje se muestra atenuado y al final. Faltan = casos que faltan para la meta con el filtro actual (✓ = meta alcanzada). ▲▼ = cambio en puntos frente al mes anterior (verde mejora, rojo empeora). Toca un indicador para ver su detalle, o una MicroRed o distrito para filtrarlo (tócalo otra vez para quitar el filtro).
     <span id="actualizado"></span>
   </footer>
 </main>
@@ -176,7 +176,8 @@ function render(){
   const est = new Map(R.detalle.map(x => [x.codigo, x]));
   const codigos = [...new Set(rows.map(r => r.codigo))];
   kInd.textContent = fN(codigos.length);
-  kReg.textContent = R.puntaje == null ? "—" : R.puntaje.toFixed(1);
+  kReg.textContent = R.puntaje == null ? "—" : R.puntaje.toFixed(1) + "%";
+  kRegDet.textContent = R.evaluados ? `${fN(R.cumple)} de ${fN(R.evaluados)} indicadores cumplen` : "";
   kOk.textContent = fN(R.cumple); kMid.textContent = fN(R.proceso); kBad.textContent = fN(R.nocumple);
 
   const orden = [...IND.keys()].filter(c => codigos.includes(c)).concat(codigos.filter(c => !IND.has(c)).sort());
@@ -199,7 +200,7 @@ function render(){
     .map(({m, x}) => { const p = x.puntaje; return `<tr class="ind" tabindex="0" data-mr="${esc(m)}" title="Filtrar ${esc(m)}">
       <td>${esc(m)}</td><td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
       <td class="n">${x.evaluados}/${x.detalle.length}</td>
-      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
+      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: % poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1) + "%"}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
     || `<tr><td colspan="6">Sin registros.</td></tr>`;
 
   // Puntaje por distrito (mismo cálculo que MicroRed). Toca una fila para filtrar ese distrito.
@@ -211,7 +212,7 @@ function render(){
       <td>${esc(nomDist(rs[0]))}</td><td>${esc(rs[0].mr)}</td>
       <td class="n">${fN(x.cumple)}</td><td class="n">${fN(x.proceso)}</td><td class="n">${fN(x.nocumple)}</td>
       <td class="n">${x.evaluados}/${x.detalle.length}</td>
-      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: puntaje poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1)}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
+      <td class="n"${pocos(x) ? ' style="opacity:.55" title="Pocos indicadores evaluados: % poco confiable"' : ""}>${p == null ? "—" : p.toFixed(1) + "%"}<div class="barra" aria-hidden="true"><i style="width:${p ?? 0}%"></i></div></td></tr>`; }).join("")
     || `<tr><td colspan="7">Sin registros.</td></tr>`;
 }
 
@@ -294,8 +295,12 @@ async function iniciar(){
   ["periodo","ubigeo","microred"].forEach(k => { if (q.get(k)) filtro[k] = q.get(k); });
   if (filtro.periodo !== TODOS && !periodos.includes(filtro.periodo)) filtro.periodo = periodos[periodos.length - 1] ?? TODOS;
 
-  if (CFG.titulo) titulo.textContent = CFG.titulo.replace(/(\d)-(\d)/g, "$1\u2011$2");
-  if (CFG.subtitulo) subtitulo.textContent = CFG.subtitulo;
+  // Año automático: {anio} = año del último periodo con datos (ej. 2026), {anio_anterior} = el anterior (2025).
+  // Ej.: "FED 2025-{anio}" -> 2025-2026 ahora y 2025-2027 cuando lleguen datos de 2027.
+  const ANIO = Number((periodos[periodos.length - 1] || "").slice(0, 4)) || new Date().getFullYear();
+  const conAnio = t => String(t).replace(/\{anio_anterior\}/g, ANIO - 1).replace(/\{anio\}/g, ANIO);
+  if (CFG.titulo) titulo.textContent = conAnio(CFG.titulo).replace(/(\d)-(\d)/g, "$1\u2011$2");
+  if (CFG.subtitulo) subtitulo.textContent = conAnio(CFG.subtitulo);
   document.title = titulo.textContent;
   estadoCarga.textContent = `● ${fN(DATOS.length)} registros`;
   if (CFG.actualizado) actualizado.textContent = ` Datos actualizados el ${CFG.actualizado}.`;
